@@ -6,6 +6,8 @@ TagManager:
   tags:
   - Head
   - Body
+  - aimcamera
+  - Text
   layers:
   - Default
   - TransparentFX
@@ -14,7 +16,7 @@ TagManager:
   - Water
   - UI
   - camerasee
-  - 
+  - character
   - 
   - 
   - 

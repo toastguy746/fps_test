@@ -1,105 +1,178 @@
 using UnityEngine;
+using TMPro;
+using UnityEngine.UI;
 using System.Collections;
 
 public class GunShoot : MonoBehaviour
 {
     [Header("총기 설정")]
-    public float range = 100f;          // 총알 최대 사거리
-    public float fireRate = 0.1f;       // 총 발사 딜레이 (초)
+    public float range = 100f;
+    public float fireRate = 0.1f;
+
+    [Header("탄창 설정")]
+    public int maxAmmo = 30;
+    private int currentAmmo;
+    public float reloadTime = 0.5f;
+    private bool isReloading = false;
 
     [Header("이펙트")]
-    public Transform firePoint;          // 총알 발사 위치 (사용은 안 됨 현재)
-    public GameObject muzzleFlash;       // 총구 화염 효과 오브젝트
-    public Light muzzleFlashLight;       // 총구 화염을 위한 라이트 컴포넌트
+    public Light muzzleFlashLight;
 
     [Header("사운드")]
-    public AudioClip gunshotSound;       // 총소리 오디오 클립
+    public AudioClip gunshotSound;
+    public AudioClip reloadClip;
+    public AudioClip hitSound; // ✅ 추가
+    private AudioSource audioSource;
 
-    private bool canShoot = true;        // 쏠 수 있는 상태인지 여부
-    private AudioSource audioSource;     // 사운드 재생용 컴포넌트
+    [Header("UI")]
+    public TextMeshProUGUI ammoText;
+    public Image hitImage; // ✅ 추가
+    public float hitImageDuration = 0.1f; // ✅ 추가
+
+    [Header("카메라")]
+    public Camera mainCamera;
+
+    [Header("조준 컨트롤러")]
+    public AimController aimController;
+
+    private bool canShoot = true;
 
     void Start()
     {
-        // 오디오소스 컴포넌트가 없으면 추가
+        currentAmmo = maxAmmo;
+        UpdateAmmoUI();
+
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
-        {
             audioSource = gameObject.AddComponent<AudioSource>();
-        }
 
-        // 총구 라이트는 처음에 꺼놓음
         if (muzzleFlashLight != null)
-        {
             muzzleFlashLight.enabled = false;
-        }
 
-        audioSource.playOnAwake = false; // 시작할 때 소리 자동 재생 안함
+        if (hitImage != null)
+            hitImage.enabled = false; // ✅ 이미지 비활성화로 시작
+
+        audioSource.playOnAwake = false;
     }
 
     void Update()
     {
-        // 마우스 왼쪽 클릭 중이고, 쏠 수 있을 때 총 쏘기
+        if (isReloading) return;
+
+        if (Input.GetKeyDown(KeyCode.R) && currentAmmo < maxAmmo)
+        {
+            StartCoroutine(Reload());
+            return;
+        }
+
+        if (currentAmmo <= 0)
+        {
+            StartCoroutine(Reload());
+            return;
+        }
+
         if (Input.GetButton("Fire1") && canShoot)
         {
             Shoot();
-            StartCoroutine(ShootCooldown()); // 재발사 쿨타임 시작
+            StartCoroutine(ShootCooldown());
         }
     }
 
     IEnumerator ShootCooldown()
     {
-        canShoot = false;                  // 쏘지 못하게 막음
-        yield return new WaitForSeconds(fireRate);  // fireRate만큼 대기
-        canShoot = true;                   // 다시 쏠 수 있게 허용
+        canShoot = false;
+        yield return new WaitForSeconds(fireRate);
+        canShoot = true;
     }
 
     void Shoot()
     {
-        Debug.Log("총 발사");             // 디버그용 출력
+        if (currentAmmo <= 0) return;
 
-        // 총소리 재생
+        currentAmmo--;
+        UpdateAmmoUI();
+
         if (gunshotSound != null && audioSource != null)
             audioSource.PlayOneShot(gunshotSound);
 
-        // 카메라 정중앙에서 레이 쏘기
-        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        if (mainCamera == null)
+        {
+            Debug.LogError("GunShoot: mainCamera가 할당되지 않았습니다.");
+            return;
+        }
+
+        Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
         RaycastHit hit;
 
-        // 레이 시각화 (빨간색, 0.1초간 보임)
         Debug.DrawRay(ray.origin, ray.direction * range, Color.red, 0.1f);
 
-        // 레이가 무언가 맞았을 때
         if (Physics.Raycast(ray, out hit, range))
         {
-            Debug.Log($"맞음: {hit.collider.name}");  // 맞은 콜라이더 이름 출력
-
-            // 맞은 콜라이더의 부모 중 DummyHealth 컴포넌트 찾기
             DummyHealth dummy = hit.collider.GetComponentInParent<DummyHealth>();
             if (dummy != null)
             {
-                // 맞은 부위 태그 (Head, Body 등) 넘겨서 데미지 처리 요청
-                string hitPartTag = hit.collider.tag;  
+                string hitPartTag = hit.collider.tag;
                 dummy.OnHit(hitPartTag);
+
+                PlayHitSound(); // ✅ 적중 효과음
+                StartCoroutine(ShowHitImage()); // ✅ 이미지 표시
             }
         }
 
-        // 총구 화염 이펙트 코루틴 실행
-        StartCoroutine(MuzzleFlashEffect());
+        if (muzzleFlashLight != null)
+            StartCoroutine(MuzzleFlashLightEffect());
     }
 
-    IEnumerator MuzzleFlashEffect()
+    IEnumerator MuzzleFlashLightEffect()
     {
-        // 총구 화염 오브젝트 켜기
-        if (muzzleFlash != null) muzzleFlash.SetActive(true);
-        // 총구 라이트 켜기
-        if (muzzleFlashLight != null) muzzleFlashLight.enabled = true;
-
-        // 0.05초 대기 (짧게 켜짐)
+        muzzleFlashLight.enabled = true;
         yield return new WaitForSeconds(0.05f);
+        muzzleFlashLight.enabled = false;
+    }
 
-        // 총구 화염 오브젝트 끄기
-        if (muzzleFlash != null) muzzleFlash.SetActive(false);
-        // 총구 라이트 끄기
-        if (muzzleFlashLight != null) muzzleFlashLight.enabled = false;
+    IEnumerator Reload()
+    {
+        isReloading = true;
+        canShoot = false;
+
+        if (aimController != null)
+            aimController.SetCanAim(false);
+
+        if (reloadClip != null && audioSource != null)
+            audioSource.PlayOneShot(reloadClip);
+
+        yield return new WaitForSeconds(reloadTime);
+
+        currentAmmo = maxAmmo;
+        UpdateAmmoUI();
+
+        isReloading = false;
+        canShoot = true;
+
+        if (aimController != null)
+            aimController.SetCanAim(true);
+    }
+
+    void UpdateAmmoUI()
+    {
+        if (ammoText != null)
+            ammoText.text = $"{currentAmmo} / {maxAmmo}";
+    }
+
+    // ✅ 적중 효과음
+    void PlayHitSound()
+    {
+        if (hitSound != null && audioSource != null)
+            audioSource.PlayOneShot(hitSound);
+    }
+
+    // ✅ 이미지 잠깐 표시
+    IEnumerator ShowHitImage()
+    {
+        if (hitImage == null) yield break;
+
+        hitImage.enabled = true;
+        yield return new WaitForSeconds(hitImageDuration);
+        hitImage.enabled = false;
     }
 }
