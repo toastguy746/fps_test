@@ -108,14 +108,15 @@ public class GunShoot : MonoBehaviour
 
         if (Physics.Raycast(ray, out hit, range))
         {
-            DummyHealth dummy = hit.collider.GetComponentInParent<DummyHealth>();
+            ObjectHealth dummy = hit.collider.GetComponentInParent<ObjectHealth>();
             if (dummy != null)
             {
                 string hitPartTag = hit.collider.tag;
                 dummy.OnHit(hitPartTag);
 
                 PlayHitSound(); // ✅ 적중 효과음
-                StartCoroutine(ShowHitImage()); // ✅ 이미지 표시
+                StartCoroutine(ShowHitImage(hitPartTag));
+ // ✅ 이미지 표시
             }
         }
 
@@ -167,12 +168,19 @@ public class GunShoot : MonoBehaviour
     }
 
     // ✅ 이미지 잠깐 표시
-    IEnumerator ShowHitImage()
+    IEnumerator ShowHitImage(string hitTag)
     {
         if (hitImage == null) yield break;
+
+        // 부위가 Head면 빨간색, 아니면 흰색
+        if (hitTag == "Head")
+            hitImage.color = Color.red;
+        else
+            hitImage.color = Color.white;
 
         hitImage.enabled = true;
         yield return new WaitForSeconds(hitImageDuration);
         hitImage.enabled = false;
     }
+
 }

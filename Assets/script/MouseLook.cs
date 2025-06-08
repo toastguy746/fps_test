@@ -2,30 +2,53 @@ using UnityEngine;
 
 public class MouseLook : MonoBehaviour
 {
-    public float mouseSensitivity = 150f;   // 마우스 감도 조절용 변수
-    public Transform playerBody;             // 플레이어 몸통(오브젝트) 참조 (좌우 회전에 사용)
+    // 마우스 감도 설정
+    public float mouseSensitivity = 150f;
 
-    [HideInInspector] public float xRotation = 0f;  // 카메라 위아래 회전 각도 저장, 인스펙터에선 안보임
+    // 플레이어 몸체 오브젝트 (Y축 회전 적용 대상)
+    public Transform playerBody;
+
+    // X축 회전 누적값 (카메라의 상하 회전)
+    [HideInInspector] public float xRotation = 0f;
+
+    // 추가: 죽음 상태 플래그
+    public bool isDead = false;
 
     void Start()
     {
-        Cursor.lockState = CursorLockMode.Locked;  // 마우스 커서 화면 중앙에 고정
-        Cursor.visible = false;                     // 마우스 커서 숨기기
+        // 마우스 커서를 화면 중앙에 고정
+        Cursor.lockState = CursorLockMode.Locked;
+
+        // 마우스 커서 숨김
+        Cursor.visible = false;
     }
 
     void Update()
     {
-        // 마우스 움직임 입력값 받아오기 (X, Y 방향)
+        // 죽었으면 입력 무시
+        if (isDead) return;
+
+        // 마우스 입력값 받기 (X축: 좌우, Y축: 상하)
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
 
-        xRotation -= mouseY;               // 마우스 Y값 반영해 카메라 위아래 회전 각도 변경 (마우스 위로 움직이면 시선 아래로 내려감)
-        xRotation = Mathf.Clamp(xRotation, -90f, 90f); // 위아래 회전 제한 (90도 이상 넘어가지 않도록)
+        // 카메라 상하 회전 누적값 갱신 (마우스 위로 이동 시 아래를 바라보도록 음수 처리)
+        xRotation -= mouseY;
 
-        // 카메라(자신) 위아래 회전 적용 (localRotation)
+        // 상하 회전 각도를 -90도~90도로 제한 (고개 꺾임 방지)
+        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
+
+        // 카메라 상하 회전 적용
         transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
 
-        // 플레이어 몸통 좌우 회전 (Y축 기준)
+        // 플레이어 몸체 좌우 회전 적용
         playerBody.Rotate(Vector3.up * mouseX);
+    }   
+
+    public void ResetRotation()
+    {
+        xRotation = 0f;  // 여기만 바꾸면 됨
+        transform.localRotation = Quaternion.identity;
     }
+
 }
